@@ -3,21 +3,20 @@ import sqlite3
 import hashlib
 import secrets
 import ipaddress
+import json
 from datetime import datetime, timedelta
 from typing import Optional
-from fastapi import FastAPI, Request, Form, HTTPException
+from fastapi import FastAPI, Request, Form
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 
 app = FastAPI(title="EV Ladeplaner")
 
-# Datenverzeichnis in Home Assistant Add-ons ist immer /data
 DATA_DIR = "/data" if os.path.exists("/data") else "./data"
 os.makedirs(DATA_DIR, exist_ok=True)
 DB_PATH = os.path.join(DATA_DIR, "planner.db")
 
-# Session-Secret dauerhaft speichern
 SECRET_FILE = os.path.join(DATA_DIR, ".secret_key")
 if os.path.exists(SECRET_FILE):
     with open(SECRET_FILE, "r") as f:
@@ -46,7 +45,6 @@ def init_db():
     conn = get_db()
     c = conn.cursor()
 
-    # Einstellungen (z.B. Firmennetzwerk CIDR & globaler Remote-Switch)
     c.execute("""
         CREATE TABLE IF NOT EXISTS settings (
             key TEXT PRIMARY KEY,
@@ -56,7 +54,6 @@ def init_db():
     c.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('company_cidrs', '192.168.0.0/16, 10.0.0.0/8, 172.16.0.0/12')")
     c.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('allow_remote_global', '0')")
 
-    # Benutzer & Fahrzeugdaten
     c.execute("""
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -72,7 +69,18 @@ def init_db():
         )
     """)
 
-    # Ladestationen (vorbereitet für spätere HA-Entitäten!)
+    # Neue Tabelle für mehrere Fahrzeuge pro Benutzer
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS vehicles (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            car_model TEXT NOT NULL,
+            battery_kwh REAL NOT NULL,
+            max_charge_kw REAL NOT NULL,
+            FOREIGN KEY(user_id) REFERENCES users(id)
+        )
+    """)
+
     c.execute("""
         CREATE TABLE IF NOT EXISTS chargers (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -86,7 +94,6 @@ def init_db():
         c.execute("INSERT INTO chargers (name, max_kw) VALUES ('Ladestation 1 (Links)', 11.0)")
         c.execute("INSERT INTO chargers (name, max_kw) VALUES ('Ladestation 2 (Rechts)', 11.0)")
 
-    # Buchungen
     c.execute("""
         CREATE TABLE IF NOT EXISTS bookings (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -97,18 +104,37 @@ def init_db():
             soc_start INTEGER DEFAULT 20,
             soc_target INTEGER DEFAULT 80,
             note TEXT DEFAULT '',
+            car_model TEXT DEFAULT '',
+            max_charge_kw REAL DEFAULT 11.0,
             FOREIGN KEY(user_id) REFERENCES users(id),
             FOREIGN KEY(charger_id) REFERENCES chargers(id)
         )
     """)
 
-    # Standard-Admin anlegen, falls noch kein User existiert
+    # Migration für bestehende Datenbanken (Spalten nachrüsten falls nötig)
+    cols = [row[1] for row in c.execute("PRAGMA table_info(bookings)").fetchall()]
+    if "car_model" not in cols:
+        c.execute("ALTER TABLE bookings ADD COLUMN car_model TEXT DEFAULT ''")
+    if "max_charge_kw" not in cols:
+        c.execute("ALTER TABLE bookings ADD COLUMN max_charge_kw REAL DEFAULT 11.0")
+
+    # Standard-Admin anlegen falls leer
     c.execute("SELECT COUNT(*) as cnt FROM users")
     if c.fetchone()["cnt"] == 0:
         c.execute("""
             INSERT INTO users (username, full_name, password_hash, is_admin, is_approved, allow_remote, car_model, battery_kwh, max_charge_kw)
             VALUES (?, ?, ?, 1, 1, 1, 'Admin E-Auto', 77.0, 11.0)
         """, ("admin", "Administrator", hash_password("admin123")))
+
+    # Bestehende User-Autos automatisch in die vehicles-Tabelle übernehmen, falls User noch kein Fahrzeug dort hat
+    users = c.execute("SELECT * FROM users").fetchall()
+    for u in users:
+        v_cnt = c.execute("SELECT COUNT(*) as cnt FROM vehicles WHERE user_id = ?", (u["id"],)).fetchone()["cnt"]
+        if v_cnt == 0:
+            c.execute("""
+                INSERT INTO vehicles (user_id, car_model, battery_kwh, max_charge_kw)
+                VALUES (?, ?, ?, ?)
+            """, (u["id"], u["car_model"], u["battery_kwh"], u["max_charge_kw"]))
 
     conn.commit()
     conn.close()
@@ -126,9 +152,8 @@ def get_client_ip(request: Request) -> str:
 
 def is_company_network(ip_str: str, cidrs_str: str) -> bool:
     try:
-        # HA Ingress läuft intern über 172.30.32.2
         if ip_str.startswith("172.30.32.") or ip_str == "127.0.0.1":
-            return False  # Ingress gilt als extern, damit Remote-Rechte greifen!
+            return False
         ip = ipaddress.ip_address(ip_str)
         for cidr in cidrs_str.split(","):
             cidr = cidr.strip()
@@ -152,7 +177,6 @@ def get_current_user(request: Request, conn):
 
 
 def base_path(request: Request) -> str:
-    # Unterstützt Home Assistant Ingress Subpfade automatisch
     return request.headers.get("X-Ingress-Path", "")
 
 
@@ -165,7 +189,6 @@ async def index(request: Request, msg: Optional[str] = None, err: Optional[str] 
     client_ip = get_client_ip(request)
     in_company = is_company_network(client_ip, settings.get("company_cidrs", ""))
 
-    # Zugriffsprüfung für eingeloggte User
     access_denied_remote = False
     if user:
         global_remote = settings.get("allow_remote_global") == "1"
@@ -174,21 +197,34 @@ async def index(request: Request, msg: Optional[str] = None, err: Optional[str] 
 
     chargers = conn.execute("SELECT * FROM chargers").fetchall()
 
-    # Buchungen der nächsten 3 Tage laden
+    # Buchungen für den Kalender laden (letzte 14 Tage bis +7 Tage)
     now = datetime.now()
-    start_window = (now - timedelta(hours=6)).strftime("%Y-%m-%dT%H:%M")
-    bookings = conn.execute("""
-        SELECT b.*, u.full_name, u.car_model, u.max_charge_kw, c.name as charger_name
+    history_window = (now - timedelta(days=14)).strftime("%Y-%m-%dT%H:%M")
+    raw_bookings = conn.execute("""
+        SELECT b.*, u.full_name,
+               COALESCE(NULLIF(b.car_model, ''), u.car_model) as display_car,
+               COALESCE(NULLIF(b.max_charge_kw, 0), u.max_charge_kw) as display_kw,
+               c.name as charger_name
         FROM bookings b
         JOIN users u ON b.user_id = u.id
         JOIN chargers c ON b.charger_id = c.id
         WHERE b.end_time >= ?
         ORDER BY b.start_time ASC
-    """, (start_window,)).fetchall()
+    """, (history_window,)).fetchall()
+
+    bookings_list = [dict(b) for b in raw_bookings]
+
+    user_vehicles = []
+    if user:
+        user_vehicles = [dict(v) for v in conn.execute("SELECT * FROM vehicles WHERE user_id = ? ORDER BY id ASC", (user["id"],)).fetchall()]
 
     all_users = []
     if user and user["is_admin"]:
-        all_users = conn.execute("SELECT * FROM users ORDER BY is_approved ASC, full_name ASC").fetchall()
+        users_rows = conn.execute("SELECT * FROM users ORDER BY is_approved ASC, full_name ASC").fetchall()
+        for u in users_rows:
+            u_dict = dict(u)
+            u_dict["vehicles"] = [dict(v) for v in conn.execute("SELECT * FROM vehicles WHERE user_id = ? ORDER BY id ASC", (u["id"],)).fetchall()]
+            all_users.append(u_dict)
 
     conn.close()
 
@@ -199,8 +235,11 @@ async def index(request: Request, msg: Optional[str] = None, err: Optional[str] 
         "request": request,
         "base_path": bp,
         "user": user,
+        "user_vehicles": user_vehicles,
+        "user_vehicles_json": json.dumps(user_vehicles),
         "chargers": chargers,
-        "bookings": bookings,
+        "bookings": bookings_list,
+        "bookings_json": json.dumps(bookings_list),
         "all_users": all_users,
         "settings": settings,
         "client_ip": client_ip,
@@ -208,6 +247,7 @@ async def index(request: Request, msg: Optional[str] = None, err: Optional[str] 
         "access_denied_remote": access_denied_remote,
         "default_start": default_start,
         "max_start": max_start,
+        "now_iso": now.strftime("%Y-%m-%dT%H:%M"),
         "msg": msg,
         "err": err
     })
@@ -236,14 +276,23 @@ async def register(
     username: str = Form(...),
     full_name: str = Form(...),
     password: str = Form(...),
+    password_confirm: str = Form(...),
     car_model: str = Form(...),
     battery_kwh: float = Form(...),
     max_charge_kw: float = Form(...)
 ):
-    conn = get_db()
     bp = base_path(request)
+    if password != password_confirm:
+        return RedirectResponse(f"{bp}/?err=Die+beiden+Passwörter+stimmen+nicht+überein!", status_code=303)
+    if len(password) < 4:
+        return RedirectResponse(f"{bp}/?err=Passwort+muss+mindestens+4+Zeichen+lang+sein", status_code=303)
+
+    conn = get_db()
     try:
-        conn.execute("""
+        cur = conn.cursor()
+        b_kwh = max(1.0, min(200.0, battery_kwh))
+        m_kw = max(1.0, min(22.0, max_charge_kw))
+        cur.execute("""
             INSERT INTO users (username, full_name, password_hash, is_admin, is_approved, allow_remote, car_model, battery_kwh, max_charge_kw)
             VALUES (?, ?, ?, 0, 0, 0, ?, ?, ?)
         """, (
@@ -251,9 +300,14 @@ async def register(
             full_name.strip(),
             hash_password(password),
             car_model.strip(),
-            max(1.0, min(200.0, battery_kwh)),
-            max(1.0, min(22.0, max_charge_kw))
+            b_kwh,
+            m_kw
         ))
+        new_user_id = cur.lastrowid
+        cur.execute("""
+            INSERT INTO vehicles (user_id, car_model, battery_kwh, max_charge_kw)
+            VALUES (?, ?, ?, ?)
+        """, (new_user_id, car_model.strip(), b_kwh, m_kw))
         conn.commit()
     except sqlite3.IntegrityError:
         conn.close()
@@ -269,29 +323,53 @@ async def logout(request: Request):
     return RedirectResponse(f"{bp}/", status_code=303)
 
 
-@app.post("/profile")
-async def update_profile(
+@app.post("/vehicles/add")
+async def add_vehicle(
     request: Request,
     car_model: str = Form(...),
     battery_kwh: float = Form(...),
-    max_charge_kw: float = Form(...)
+    max_charge_kw: float = Form(...),
+    target_user_id: Optional[int] = Form(None)
 ):
     conn = get_db()
     bp = base_path(request)
     user = get_current_user(request, conn)
     if user:
+        owner_id = user["id"]
+        if target_user_id and user["is_admin"]:
+            owner_id = target_user_id
         conn.execute("""
-            UPDATE users SET car_model = ?, battery_kwh = ?, max_charge_kw = ? WHERE id = ?
-        """, (car_model.strip(), battery_kwh, max_charge_kw, user["id"]))
+            INSERT INTO vehicles (user_id, car_model, battery_kwh, max_charge_kw)
+            VALUES (?, ?, ?, ?)
+        """, (owner_id, car_model.strip(), max(1.0, min(200.0, battery_kwh)), max(1.0, min(22.0, max_charge_kw))))
         conn.commit()
     conn.close()
-    return RedirectResponse(f"{bp}/?msg=Fahrzeugdaten+gespeichert", status_code=303)
+    return RedirectResponse(f"{bp}/?msg=Fahrzeug+hinzugefügt", status_code=303)
+
+
+@app.post("/vehicles/{vehicle_id}/delete")
+async def delete_vehicle(request: Request, vehicle_id: int):
+    conn = get_db()
+    bp = base_path(request)
+    user = get_current_user(request, conn)
+    if user:
+        veh = conn.execute("SELECT * FROM vehicles WHERE id = ?", (vehicle_id,)).fetchone()
+        if veh and (veh["user_id"] == user["id"] or user["is_admin"]):
+            cnt = conn.execute("SELECT COUNT(*) as cnt FROM vehicles WHERE user_id = ?", (veh["user_id"],)).fetchone()["cnt"]
+            if cnt <= 1:
+                conn.close()
+                return RedirectResponse(f"{bp}/?err=Mindestens+ein+Fahrzeug+muss+hinterlegt+bleiben", status_code=303)
+            conn.execute("DELETE FROM vehicles WHERE id = ?", (vehicle_id,))
+            conn.commit()
+    conn.close()
+    return RedirectResponse(f"{bp}/?msg=Fahrzeug+entfernt", status_code=303)
 
 
 @app.post("/book")
 async def create_booking(
     request: Request,
     charger_id: int = Form(...),
+    vehicle_id: int = Form(...),
     start_time: str = Form(...),
     soc_start: int = Form(...),
     soc_target: int = Form(...),
@@ -304,6 +382,11 @@ async def create_booking(
         conn.close()
         return RedirectResponse(f"{bp}/?err=Nicht+autorisiert", status_code=303)
 
+    vehicle = conn.execute("SELECT * FROM vehicles WHERE id = ? AND user_id = ?", (vehicle_id, user["id"])).fetchone()
+    if not vehicle:
+        conn.close()
+        return RedirectResponse(f"{bp}/?err=Bitte+ein+gültiges+Fahrzeug+auswählen", status_code=303)
+
     try:
         dt_start = datetime.strptime(start_time, "%Y-%m-%dT%H:%M")
     except ValueError:
@@ -311,12 +394,10 @@ async def create_booking(
         return RedirectResponse(f"{bp}/?err=Ungültiges+Datumsformat", status_code=303)
 
     now = datetime.now()
-    # Regel 1: Nicht in der Vergangenheit (15 Min Toleranz)
     if dt_start < now - timedelta(minutes=15):
         conn.close()
         return RedirectResponse(f"{bp}/?err=Startzeit+darf+nicht+in+der+Vergangenheit+liegen", status_code=303)
 
-    # Regel 2: Maximal 48 Stunden (2 Tage) im Voraus!
     if dt_start > now + timedelta(hours=48):
         conn.close()
         return RedirectResponse(f"{bp}/?err=Buchungen+sind+maximal+2+Tage+(48h)+im+Voraus+möglich!", status_code=303)
@@ -330,9 +411,8 @@ async def create_booking(
         conn.close()
         return RedirectResponse(f"{bp}/?err=Ladestation+nicht+gefunden", status_code=303)
 
-    # Automatische Ladedauer-Berechnung inkl. 10% Ladeverlust-Puffer
-    needed_kwh = user["battery_kwh"] * ((soc_target - soc_start) / 100.0)
-    effective_kw = min(charger["max_kw"], user["max_charge_kw"])
+    needed_kwh = vehicle["battery_kwh"] * ((soc_target - soc_start) / 100.0)
+    effective_kw = min(charger["max_kw"], vehicle["max_charge_kw"])
     duration_hours = (needed_kwh / effective_kw) * 1.10
     duration_minutes = max(30, int(round(duration_hours * 60)))
     dt_end = dt_start + timedelta(minutes=duration_minutes)
@@ -340,7 +420,6 @@ async def create_booking(
     start_str = dt_start.strftime("%Y-%m-%dT%H:%M")
     end_str = dt_end.strftime("%Y-%m-%dT%H:%M")
 
-    # Kollisionsprüfung für diese Ladestation
     conflict = conn.execute("""
         SELECT b.*, u.full_name FROM bookings b
         JOIN users u ON b.user_id = u.id
@@ -357,13 +436,13 @@ async def create_booking(
         )
 
     conn.execute("""
-        INSERT INTO bookings (user_id, charger_id, start_time, end_time, soc_start, soc_target, note)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-    """, (user["id"], charger_id, start_str, end_str, soc_start, soc_target, note.strip()))
+        INSERT INTO bookings (user_id, charger_id, start_time, end_time, soc_start, soc_target, note, car_model, max_charge_kw)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (user["id"], charger_id, start_str, end_str, soc_start, soc_target, note.strip(), vehicle["car_model"], vehicle["max_charge_kw"]))
     conn.commit()
     conn.close()
 
-    return RedirectResponse(f"{bp}/?msg=Ladeslot+gebucht+({duration_minutes}+Minuten)", status_code=303)
+    return RedirectResponse(f"{bp}/?msg=Ladeslot+für+{vehicle['car_model']}+gebucht+({duration_minutes}+Minuten)", status_code=303)
 
 
 @app.post("/booking/{booking_id}/delete")
@@ -401,6 +480,7 @@ async def admin_delete_user(request: Request, target_id: int):
     user = get_current_user(request, conn)
     if user and user["is_admin"] and target_id != user["id"]:
         conn.execute("DELETE FROM bookings WHERE user_id = ?", (target_id,))
+        conn.execute("DELETE FROM vehicles WHERE user_id = ?", (target_id,))
         conn.execute("DELETE FROM users WHERE id = ?", (target_id,))
         conn.commit()
     conn.close()
