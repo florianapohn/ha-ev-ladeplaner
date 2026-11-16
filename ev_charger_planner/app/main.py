@@ -69,7 +69,6 @@ def init_db():
         )
     """)
 
-    # Neue Tabelle für mehrere Fahrzeuge pro Benutzer
     c.execute("""
         CREATE TABLE IF NOT EXISTS vehicles (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -106,17 +105,20 @@ def init_db():
             note TEXT DEFAULT '',
             car_model TEXT DEFAULT '',
             max_charge_kw REAL DEFAULT 11.0,
+            charged_kwh REAL DEFAULT 0.0,
             FOREIGN KEY(user_id) REFERENCES users(id),
             FOREIGN KEY(charger_id) REFERENCES chargers(id)
         )
     """)
 
-    # Migration für bestehende Datenbanken (Spalten nachrüsten falls nötig)
+    # Migrationen für bestehende Datenbanken
     cols = [row[1] for row in c.execute("PRAGMA table_info(bookings)").fetchall()]
     if "car_model" not in cols:
         c.execute("ALTER TABLE bookings ADD COLUMN car_model TEXT DEFAULT ''")
     if "max_charge_kw" not in cols:
         c.execute("ALTER TABLE bookings ADD COLUMN max_charge_kw REAL DEFAULT 11.0")
+    if "charged_kwh" not in cols:
+        c.execute("ALTER TABLE bookings ADD COLUMN charged_kwh REAL DEFAULT 0.0")
 
     # Standard-Admin anlegen falls leer
     c.execute("SELECT COUNT(*) as cnt FROM users")
@@ -126,7 +128,7 @@ def init_db():
             VALUES (?, ?, ?, 1, 1, 1, 'Admin E-Auto', 77.0, 11.0)
         """, ("admin", "Administrator", hash_password("admin123")))
 
-    # Bestehende User-Autos automatisch in die vehicles-Tabelle übernehmen, falls User noch kein Fahrzeug dort hat
+    # Bestehende User-Autos übernehmen
     users = c.execute("SELECT * FROM users").fetchall()
     for u in users:
         v_cnt = c.execute("SELECT COUNT(*) as cnt FROM vehicles WHERE user_id = ?", (u["id"],)).fetchone()["cnt"]
@@ -135,6 +137,14 @@ def init_db():
                 INSERT INTO vehicles (user_id, car_model, battery_kwh, max_charge_kw)
                 VALUES (?, ?, ?, ?)
             """, (u["id"], u["car_model"], u["battery_kwh"], u["max_charge_kw"]))
+
+    # Bestehende Buchungen ohne charged_kwh nachträglich berechnen
+    old_bookings = c.execute("SELECT * FROM bookings WHERE charged_kwh IS NULL OR charged_kwh = 0").fetchall()
+    for ob in old_bookings:
+        u_row = c.execute("SELECT battery_kwh FROM users WHERE id = ?", (ob["user_id"],)).fetchone()
+        b_kwh = u_row["battery_kwh"] if u_row else 60.0
+        calc_kwh = round(b_kwh * (max(0, ob["soc_target"] - ob["soc_start"]) / 100.0), 2)
+        c.execute("UPDATE bookings SET charged_kwh = ? WHERE id = ?", (calc_kwh, ob["id"]))
 
     conn.commit()
     conn.close()
@@ -197,9 +207,8 @@ async def index(request: Request, msg: Optional[str] = None, err: Optional[str] 
 
     chargers = conn.execute("SELECT * FROM chargers").fetchall()
 
-    # Buchungen für den Kalender laden (letzte 14 Tage bis +7 Tage)
     now = datetime.now()
-    history_window = (now - timedelta(days=14)).strftime("%Y-%m-%dT%H:%M")
+    history_window = (now - timedelta(days=30)).strftime("%Y-%m-%dT%H:%M")
     raw_bookings = conn.execute("""
         SELECT b.*, u.full_name,
                COALESCE(NULLIF(b.car_model, ''), u.car_model) as display_car,
@@ -219,12 +228,23 @@ async def index(request: Request, msg: Optional[str] = None, err: Optional[str] 
         user_vehicles = [dict(v) for v in conn.execute("SELECT * FROM vehicles WHERE user_id = ? ORDER BY id ASC", (user["id"],)).fetchall()]
 
     all_users = []
+    all_stats_bookings = []
     if user and user["is_admin"]:
         users_rows = conn.execute("SELECT * FROM users ORDER BY is_approved ASC, full_name ASC").fetchall()
         for u in users_rows:
             u_dict = dict(u)
             u_dict["vehicles"] = [dict(v) for v in conn.execute("SELECT * FROM vehicles WHERE user_id = ? ORDER BY id ASC", (u["id"],)).fetchall()]
             all_users.append(u_dict)
+
+        stats_rows = conn.execute("""
+            SELECT b.id, b.user_id, b.start_time, b.end_time, b.charged_kwh,
+                   COALESCE(NULLIF(b.car_model, ''), u.car_model) as car_model,
+                   u.full_name, u.username
+            FROM bookings b
+            JOIN users u ON b.user_id = u.id
+            ORDER BY b.start_time DESC
+        """).fetchall()
+        all_stats_bookings = [dict(r) for r in stats_rows]
 
     conn.close()
 
@@ -241,6 +261,8 @@ async def index(request: Request, msg: Optional[str] = None, err: Optional[str] 
         "bookings": bookings_list,
         "bookings_json": json.dumps(bookings_list),
         "all_users": all_users,
+        "all_users_json": json.dumps([{"id": u["id"], "full_name": u["full_name"], "username": u["username"]} for u in all_users]),
+        "all_stats_bookings_json": json.dumps(all_stats_bookings),
         "settings": settings,
         "client_ip": client_ip,
         "in_company": in_company,
@@ -411,7 +433,7 @@ async def create_booking(
         conn.close()
         return RedirectResponse(f"{bp}/?err=Ladestation+nicht+gefunden", status_code=303)
 
-    needed_kwh = vehicle["battery_kwh"] * ((soc_target - soc_start) / 100.0)
+    needed_kwh = round(vehicle["battery_kwh"] * ((soc_target - soc_start) / 100.0), 2)
     effective_kw = min(charger["max_kw"], vehicle["max_charge_kw"])
     duration_hours = (needed_kwh / effective_kw) * 1.10
     duration_minutes = max(30, int(round(duration_hours * 60)))
@@ -436,13 +458,13 @@ async def create_booking(
         )
 
     conn.execute("""
-        INSERT INTO bookings (user_id, charger_id, start_time, end_time, soc_start, soc_target, note, car_model, max_charge_kw)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, (user["id"], charger_id, start_str, end_str, soc_start, soc_target, note.strip(), vehicle["car_model"], vehicle["max_charge_kw"]))
+        INSERT INTO bookings (user_id, charger_id, start_time, end_time, soc_start, soc_target, note, car_model, max_charge_kw, charged_kwh)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (user["id"], charger_id, start_str, end_str, soc_start, soc_target, note.strip(), vehicle["car_model"], vehicle["max_charge_kw"], needed_kwh))
     conn.commit()
     conn.close()
 
-    return RedirectResponse(f"{bp}/?msg=Ladeslot+für+{vehicle['car_model']}+gebucht+({duration_minutes}+Minuten)", status_code=303)
+    return RedirectResponse(f"{bp}/?msg=Ladeslot+für+{vehicle['car_model']}+gebucht+({needed_kwh}+kWh+/+{duration_minutes}+Min.)", status_code=303)
 
 
 @app.post("/booking/{booking_id}/delete")
