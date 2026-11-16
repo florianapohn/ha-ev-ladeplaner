@@ -8,9 +8,9 @@
 </head>
 <body class="bg-slate-100 text-slate-800 min-h-screen">
 
-<div class="max-w-5xl mx-auto p-4 md:p-6">
+<div class="max-w-7xl mx-auto p-3 md:p-6">
     <!-- Header -->
-    <header class="bg-white rounded-2xl shadow-sm p-4 mb-6 flex flex-wrap items-center justify-between gap-4">
+    <header class="bg-white rounded-2xl shadow-sm p-4 mb-5 flex flex-wrap items-center justify-between gap-4">
         <div class="flex items-center gap-3">
             <div class="bg-emerald-600 text-white p-2.5 rounded-xl font-bold text-xl">⚡</div>
             <div>
@@ -39,15 +39,15 @@
 
     <!-- Meldungen -->
     {% if msg %}
-        <div class="bg-emerald-50 border border-emerald-200 text-emerald-800 px-4 py-3 rounded-xl mb-6 text-sm font-medium">✅ {{ msg }}</div>
+        <div class="bg-emerald-50 border border-emerald-200 text-emerald-800 px-4 py-3 rounded-xl mb-5 text-sm font-medium">✅ {{ msg }}</div>
     {% endif %}
     {% if err %}
-        <div class="bg-rose-50 border border-rose-200 text-rose-800 px-4 py-3 rounded-xl mb-6 text-sm font-medium">⚠️ {{ err }}</div>
+        <div class="bg-rose-50 border border-rose-200 text-rose-800 px-4 py-3 rounded-xl mb-5 text-sm font-medium">⚠️ {{ err }}</div>
     {% endif %}
 
     {% if not user %}
     <!-- LOGIN & REGISTRIERUNG -->
-    <div class="grid md:grid-cols-2 gap-6">
+    <div class="grid md:grid-cols-2 gap-6 max-w-4xl mx-auto">
         <!-- Login -->
         <div class="bg-white p-6 rounded-2xl shadow-sm">
             <h2 class="text-lg font-bold mb-4">Anmelden</h2>
@@ -58,7 +58,10 @@
                 </div>
                 <div>
                     <label class="block text-sm font-medium mb-1">Passwort</label>
-                    <input type="password" name="password" required class="w-full border rounded-xl px-3 py-2">
+                    <div class="relative">
+                        <input type="password" id="login_pw" name="password" required class="w-full border rounded-xl px-3 py-2 pr-10">
+                        <button type="button" onclick="togglePw('login_pw', this)" class="absolute right-2.5 top-2 text-slate-400 hover:text-slate-700 text-sm" title="Passwort anzeigen">👁️</button>
+                    </div>
                 </div>
                 <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2.5 rounded-xl">Einloggen</button>
             </form>
@@ -68,7 +71,7 @@
         <!-- Registrierung -->
         <div class="bg-white p-6 rounded-2xl shadow-sm">
             <h2 class="text-lg font-bold mb-4">Neu registrieren (E-Auto Fahrer)</h2>
-            <form method="post" action="{{ base_path }}/register" class="space-y-3">
+            <form method="post" action="{{ base_path }}/register" class="space-y-3" onsubmit="return checkRegForm()">
                 <div class="grid grid-cols-2 gap-3">
                     <div>
                         <label class="block text-xs font-medium mb-1">Vollständiger Name</label>
@@ -79,13 +82,27 @@
                         <input type="text" name="username" required class="w-full border rounded-xl px-3 py-2 text-sm" placeholder="max">
                     </div>
                 </div>
-                <div>
-                    <label class="block text-xs font-medium mb-1">Passwort</label>
-                    <input type="password" name="password" required class="w-full border rounded-xl px-3 py-2 text-sm">
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-medium mb-1">Passwort</label>
+                        <div class="relative">
+                            <input type="password" id="reg_pw1" name="password" required class="w-full border rounded-xl px-3 py-2 pr-9 text-sm" oninput="checkPwMatch()">
+                            <button type="button" onclick="togglePw('reg_pw1', this)" class="absolute right-2 top-2 text-slate-400 hover:text-slate-700 text-xs" title="Anzeigen/Verbergen">👁️</button>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium mb-1">Passwort wiederholen</label>
+                        <div class="relative">
+                            <input type="password" id="reg_pw2" name="password_confirm" required class="w-full border rounded-xl px-3 py-2 pr-9 text-sm" oninput="checkPwMatch()">
+                            <button type="button" onclick="togglePw('reg_pw2', this)" class="absolute right-2 top-2 text-slate-400 hover:text-slate-700 text-xs" title="Anzeigen/Verbergen">👁️</button>
+                        </div>
+                    </div>
                 </div>
+                <div id="pw_match_hint" class="text-xs hidden"></div>
+
                 <hr class="my-2">
                 <div>
-                    <label class="block text-xs font-medium mb-1">Fahrzeugmodell</label>
+                    <label class="block text-xs font-medium mb-1">Haupt-Fahrzeugmodell</label>
                     <input type="text" name="car_model" required class="w-full border rounded-xl px-3 py-2 text-sm" placeholder="z.B. VW ID.4 / Skoda Octavia iV">
                 </div>
                 <div class="grid grid-cols-2 gap-3">
@@ -120,10 +137,10 @@
 
     {% else %}
     <!-- HAUPTANSICHT EINGELOGGT -->
-    <div class="grid lg:grid-cols-3 gap-6">
+    <div class="grid xl:grid-cols-12 gap-6">
         
-        <!-- Linke Spalte: Neuen Ladeslot planen + eigenes Fahrzeug -->
-        <div class="space-y-6">
+        <!-- Linke Spalte (4/12): Ladeslot planen + Meine Fahrzeuge -->
+        <div class="xl:col-span-4 space-y-5">
             <div class="bg-white p-5 rounded-2xl shadow-sm">
                 <h2 class="text-lg font-bold mb-1">⚡ Ladeslot planen</h2>
                 <p class="text-xs text-slate-500 mb-4">Maximal 48 Stunden (2 Tage) im Voraus buchbar.</p>
@@ -134,6 +151,14 @@
                         <select name="charger_id" class="w-full border rounded-xl px-3 py-2 text-sm bg-white">
                             {% for c in chargers %}
                                 <option value="{{ c.id }}">{{ c.name }} (max. {{ c.max_kw }} kW)</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium mb-1">Mit welchem Auto lädst du?</label>
+                        <select id="vehicle_select" name="vehicle_id" class="w-full border rounded-xl px-3 py-2 text-sm bg-white font-medium" onchange="calcDuration()">
+                            {% for v in user_vehicles %}
+                                <option value="{{ v.id }}">{{ v.car_model }} ({{ v.battery_kwh }} kWh • {{ v.max_charge_kw }} kW)</option>
                             {% endfor %}
                         </select>
                     </div>
@@ -152,8 +177,7 @@
                         </div>
                     </div>
                     <div class="bg-emerald-50 border border-emerald-100 rounded-xl p-3 text-xs text-emerald-900">
-                        <div>Fahrzeug: <strong>{{ user.car_model }}</strong> ({{ user.battery_kwh }} kWh / max. {{ user.max_charge_kw }} kW)</div>
-                        <div class="mt-1 text-sm font-bold" id="est_preview">Geschätzte Ladedauer: ~3 Std. 36 Min.</div>
+                        <div class="font-bold text-sm" id="est_preview">Geschätzte Ladedauer: wird berechnet...</div>
                     </div>
                     <div>
                         <label class="block text-xs font-medium mb-1">Notiz (optional)</label>
@@ -163,86 +187,102 @@
                 </form>
             </div>
 
-            <!-- Mein Fahrzeug anpassen -->
+            <!-- Meine Fahrzeuge verwalten (1. Auto, 2. Auto, ...) -->
             <div class="bg-white p-5 rounded-2xl shadow-sm">
-                <h3 class="text-sm font-bold mb-3">🚗 Mein Fahrzeugprofil</h3>
-                <form method="post" action="{{ base_path }}/profile" class="space-y-3">
-                    <div>
-                        <label class="block text-xs text-slate-500">Modell</label>
-                        <input type="text" name="car_model" value="{{ user.car_model }}" class="w-full border rounded-xl px-3 py-1.5 text-sm">
-                    </div>
-                    <div class="grid grid-cols-2 gap-2">
+                <h3 class="text-sm font-bold mb-3">🚗 Meine Fahrzeuge ({{ user_vehicles|length }})</h3>
+                <div class="space-y-2 mb-4">
+                    {% for v in user_vehicles %}
+                    <div class="flex items-center justify-between bg-slate-50 border rounded-xl px-3 py-2 text-xs">
                         <div>
-                            <label class="block text-xs text-slate-500">Akku (kWh)</label>
-                            <input type="number" step="0.5" name="battery_kwh" value="{{ user.battery_kwh }}" class="w-full border rounded-xl px-3 py-1.5 text-sm">
+                            <div class="font-bold text-slate-800">{{ v.car_model }}</div>
+                            <div class="text-slate-500">Akku: {{ v.battery_kwh }} kWh • Max: {{ v.max_charge_kw }} kW</div>
                         </div>
-                        <div>
-                            <label class="block text-xs text-slate-500">Max. Ladeleistung (kW)</label>
-                            <input type="number" step="0.1" name="max_charge_kw" value="{{ user.max_charge_kw }}" class="w-full border rounded-xl px-3 py-1.5 text-sm">
-                        </div>
-                    </div>
-                    <button type="submit" class="w-full bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-semibold py-2 rounded-xl">Daten aktualisieren</button>
-                </form>
-            </div>
-        </div>
-
-        <!-- Rechte 2 Spalten: Belegungsplan -->
-        <div class="lg:col-span-2 space-y-6">
-            <div class="bg-white p-5 rounded-2xl shadow-sm">
-                <h2 class="text-lg font-bold mb-4">📅 Aktueller Belegungsplan (Heute & nächste 2 Tage)</h2>
-                
-                <div class="grid md:grid-cols-2 gap-4">
-                    {% for c in chargers %}
-                    <div class="border rounded-xl p-4 bg-slate-50">
-                        <div class="flex items-center justify-between mb-3">
-                            <h3 class="font-bold text-slate-800">{{ c.name }}</h3>
-                            <span class="text-xs bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full font-medium">{{ c.max_kw }} kW</span>
-                        </div>
-                        
-                        <div class="space-y-2.5">
-                            {% set ns = namespace(found=false) %}
-                            {% for b in bookings if b.charger_id == c.id %}
-                                {% set ns.found = true %}
-                                <div class="bg-white border border-slate-200 rounded-xl p-3 shadow-xs">
-                                    <div class="flex justify-between items-start">
-                                        <div>
-                                            <div class="text-xs font-bold text-emerald-700">
-                                                {{ b.start_time.replace('T', ' ') }} → {{ b.end_time.split('T')[1] }}
-                                            </div>
-                                            <div class="font-semibold text-sm mt-0.5">{{ b.full_name }}</div>
-                                            <div class="text-xs text-slate-500">{{ b.car_model }} ({{ b.max_charge_kw }} kW) • {{ b.soc_start }}% → {{ b.soc_target }}%</div>
-                                            {% if b.note %}
-                                                <div class="text-xs text-amber-700 bg-amber-50 px-2 py-0.5 rounded mt-1 inline-block">💬 {{ b.note }}</div>
-                                            {% endif %}
-                                        </div>
-                                        {% if user.is_admin or b.user_id == user.id %}
-                                        <form method="post" action="{{ base_path }}/booking/{{ b.id }}/delete">
-                                            <button class="text-xs text-rose-500 hover:text-rose-700 font-medium" title="Stornieren">✕</button>
-                                        </form>
-                                        {% endif %}
-                                    </div>
-                                </div>
-                            {% endfor %}
-                            {% if not ns.found %}
-                                <p class="text-xs text-slate-400 italic py-4 text-center">Aktuell keine Buchungen für diese Säule.</p>
-                            {% endif %}
-                        </div>
+                        {% if user_vehicles|length > 1 %}
+                        <form method="post" action="{{ base_path }}/vehicles/{{ v.id }}/delete">
+                            <button class="text-rose-500 hover:text-rose-700 font-semibold px-2 py-1" title="Fahrzeug entfernen">✕</button>
+                        </form>
+                        {% endif %}
                     </div>
                     {% endfor %}
                 </div>
+
+                <details class="border-t pt-3">
+                    <summary class="text-xs font-bold text-emerald-700 cursor-pointer hover:underline">+ Weiteres Auto hinzufügen</summary>
+                    <form method="post" action="{{ base_path }}/vehicles/add" class="space-y-2.5 mt-3">
+                        <div>
+                            <label class="block text-xs text-slate-500">Fahrzeugmodell</label>
+                            <input type="text" name="car_model" required placeholder="z.B. Zweitwagen / Fiat 500e" class="w-full border rounded-xl px-3 py-1.5 text-sm">
+                        </div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <div>
+                                <label class="block text-xs text-slate-500">Akku (kWh)</label>
+                                <input type="number" step="0.5" name="battery_kwh" value="42" required class="w-full border rounded-xl px-3 py-1.5 text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-xs text-slate-500">Max. Leistung (kW)</label>
+                                <select name="max_charge_kw" class="w-full border rounded-xl px-3 py-1.5 text-sm bg-white">
+                                    <option value="3.7">3,7 kW</option>
+                                    <option value="7.4">7,4 kW</option>
+                                    <option value="11.0" selected>11,0 kW</option>
+                                </select>
+                            </div>
+                        </div>
+                        <button type="submit" class="w-full bg-slate-800 hover:bg-slate-900 text-white text-xs font-semibold py-2 rounded-xl">Auto speichern</button>
+                    </form>
+                </details>
+            </div>
+        </div>
+
+        <!-- Rechte Spalte (8/12): Outlook-Style Kalender & Admin-Bereich -->
+        <div class="xl:col-span-8 space-y-6">
+            
+            <!-- OUTLOOK-STYLE KALENDER -->
+            <div class="bg-white p-4 md:p-5 rounded-2xl shadow-sm">
+                <!-- Kalender Toolbar -->
+                <div class="flex flex-wrap items-center justify-between gap-3 mb-4 pb-3 border-b">
+                    <div class="flex items-center gap-2">
+                        <button type="button" onclick="calToday()" class="border border-slate-300 hover:bg-slate-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Heute</button>
+                        <div class="flex items-center">
+                            <button type="button" onclick="calShift(-1)" class="border border-slate-300 hover:bg-slate-50 px-2.5 py-1.5 rounded-l-lg text-xs font-bold">&lt;</button>
+                            <button type="button" onclick="calShift(1)" class="border-t border-b border-r border-slate-300 hover:bg-slate-50 px-2.5 py-1.5 rounded-r-lg text-xs font-bold">&gt;</button>
+                        </div>
+                        <h2 id="cal_title" class="text-base md:text-lg font-bold text-slate-900 ml-2">Kalenderübersicht</h2>
+                    </div>
+
+                    <div class="flex items-center gap-3">
+                        <!-- Legende Ladestationen -->
+                        <div class="hidden sm:flex items-center gap-2 text-xs">
+                            <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-emerald-500 inline-block"></span> Säule 1</span>
+                            <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-sky-500 inline-block"></span> Säule 2</span>
+                        </div>
+                        <select id="cal_mode" onchange="renderCalendar()" class="border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-medium bg-white">
+                            <option value="workweek" selected>Arbeitswoche (Mo–Fr)</option>
+                            <option value="fullweek">Ganze Woche (Mo–So)</option>
+                            <option value="3days">3-Tage-Fokus</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Kalender Raster -->
+                <div class="overflow-x-auto">
+                    <div id="outlook_calendar" class="min-w-[650px] border border-slate-200 rounded-xl overflow-hidden bg-white">
+                        <!-- Wird dynamisch per JS im Outlook-Stil gezeichnet -->
+                    </div>
+                </div>
+                <p class="text-[11px] text-slate-400 mt-2">Tipp: Klicke auf einen Termin im Kalender, um Details zu sehen oder ihn zu stornieren.</p>
             </div>
 
             {% if user.is_admin %}
             <!-- ADMIN-BEREICH -->
             <div class="bg-white p-5 rounded-2xl shadow-sm border-2 border-indigo-100">
-                <h2 class="text-lg font-bold text-indigo-900 mb-4">🛡️ Admin-Bereich: Benutzer & Netzwerkzugriff</h2>
+                <h2 class="text-lg font-bold text-indigo-900 mb-4">🛡️ Admin-Bereich: Benutzer, Fahrzeuge & Netzwerkzugriff</h2>
                 
                 <!-- Netzwerk & Remote-Regeln -->
                 <form method="post" action="{{ base_path }}/admin/settings" class="bg-indigo-50/50 p-4 rounded-xl mb-5 space-y-3">
                     <div>
                         <label class="block text-xs font-bold text-indigo-950 mb-1">Erlaubte Firmennetzwerk-IPs (CIDR, kommagetrennt)</label>
                         <input type="text" name="company_cidrs" value="{{ settings.company_cidrs }}" class="w-full border rounded-lg px-3 py-1.5 text-xs bg-white">
-                        <p class="text-[11px] text-slate-500 mt-0.5">Deine aktuelle IP ist <code>{{ client_ip }}</code>. Hier z. B. euer Firmen-Subnetz (<code>192.168.1.0/24</code>) oder eure feste Firmen-WAN-IP eintragen.</p>
+                        <p class="text-[11px] text-slate-500 mt-0.5">Deine aktuelle IP ist <code>{{ client_ip }}</code>.</p>
                     </div>
                     <label class="flex items-center gap-2 text-xs font-medium cursor-pointer">
                         <input type="checkbox" name="allow_remote_global" value="1" {% if settings.allow_remote_global == '1' %}checked{% endif %}>
@@ -251,14 +291,14 @@
                     <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold px-4 py-2 rounded-lg">Netzwerk-Regeln speichern</button>
                 </form>
 
-                <!-- Benutzerverwaltung -->
+                <!-- Benutzerverwaltung inkl. Fahrzeugzuweisung -->
                 <div class="overflow-x-auto">
                     <table class="w-full text-left text-xs">
                         <thead>
                             <tr class="border-b text-slate-500">
-                                <th class="py-2">Name / Auto</th>
+                                <th class="py-2">Name / Hinterlegte Fahrzeuge</th>
                                 <th class="py-2">Status</th>
-                                <th class="py-2">Unterwegs-Zugriff</th>
+                                <th class="py-2">Unterwegs</th>
                                 <th class="py-2">Rolle</th>
                                 <th class="py-2 text-right">Aktion</th>
                             </tr>
@@ -266,19 +306,45 @@
                         <tbody class="divide-y">
                             {% for u in all_users %}
                             <tr>
-                                <td class="py-2.5">
-                                    <div class="font-bold">{{ u.full_name }} <span class="text-slate-400 font-normal">(@{{ u.username }})</span></div>
-                                    <div class="text-slate-500">{{ u.car_model }} • {{ u.battery_kwh }} kWh • {{ u.max_charge_kw }} kW</div>
+                                <td class="py-3 pr-2">
+                                    <div class="font-bold text-sm">{{ u.full_name }} <span class="text-slate-400 font-normal text-xs">(@{{ u.username }})</span></div>
+                                    <div class="mt-1 space-y-1">
+                                        {% for v in u.vehicles %}
+                                        <div class="inline-flex items-center gap-1.5 bg-slate-100 px-2 py-0.5 rounded text-[11px] mr-1">
+                                            <span>🚗 {{ v.car_model }} ({{ v.battery_kwh }} kWh / {{ v.max_charge_kw }} kW)</span>
+                                            {% if u.vehicles|length > 1 %}
+                                            <form method="post" action="{{ base_path }}/vehicles/{{ v.id }}/delete" class="inline">
+                                                <button class="text-rose-500 hover:text-rose-700 font-bold" title="Auto entfernen">×</button>
+                                            </form>
+                                            {% endif %}
+                                        </div>
+                                        {% endfor %}
+                                    </div>
+                                    <!-- Admin: Weiteres Auto für diesen User zuweisen -->
+                                    <details class="mt-1.5">
+                                        <summary class="text-[11px] text-indigo-600 cursor-pointer hover:underline">+ Auto zuweisen</summary>
+                                        <form method="post" action="{{ base_path }}/vehicles/add" class="flex flex-wrap gap-1.5 mt-1.5 bg-slate-50 p-2 rounded-lg border">
+                                            <input type="hidden" name="target_user_id" value="{{ u.id }}">
+                                            <input type="text" name="car_model" placeholder="Modell" required class="border rounded px-2 py-1 text-xs w-28">
+                                            <input type="number" step="0.5" name="battery_kwh" placeholder="kWh" value="60" required class="border rounded px-2 py-1 text-xs w-16">
+                                            <select name="max_charge_kw" class="border rounded px-1.5 py-1 text-xs bg-white">
+                                                <option value="3.7">3.7 kW</option>
+                                                <option value="7.4">7.4 kW</option>
+                                                <option value="11.0" selected>11 kW</option>
+                                            </select>
+                                            <button type="submit" class="bg-indigo-600 text-white px-2.5 py-1 rounded text-xs font-semibold">OK</button>
+                                        </form>
+                                    </details>
                                 </td>
-                                <td class="py-2.5">
+                                <td class="py-3 align-top">
                                     <form method="post" action="{{ base_path }}/admin/user/{{ u.id }}/toggle">
                                         <input type="hidden" name="field" value="is_approved">
                                         <button class="px-2 py-1 rounded font-semibold {% if u.is_approved %}bg-emerald-100 text-emerald-800{% else %}bg-amber-100 text-amber-800 animate-pulse{% endif %}">
-                                            {% if u.is_approved %}Freigeschaltet{% else %}Wartet (Freigeben){% endif %}
+                                            {% if u.is_approved %}Freigeschaltet{% else %}Freigeben{% endif %}
                                         </button>
                                     </form>
                                 </td>
-                                <td class="py-2.5">
+                                <td class="py-3 align-top">
                                     <form method="post" action="{{ base_path }}/admin/user/{{ u.id }}/toggle">
                                         <input type="hidden" name="field" value="allow_remote">
                                         <button class="px-2 py-1 rounded font-semibold {% if u.allow_remote %}bg-sky-100 text-sky-800{% else %}bg-slate-100 text-slate-500{% endif %}">
@@ -286,7 +352,7 @@
                                         </button>
                                     </form>
                                 </td>
-                                <td class="py-2.5">
+                                <td class="py-3 align-top">
                                     <form method="post" action="{{ base_path }}/admin/user/{{ u.id }}/toggle">
                                         <input type="hidden" name="field" value="is_admin">
                                         <button class="px-2 py-1 rounded {% if u.is_admin %}bg-indigo-100 text-indigo-800 font-bold{% else %}bg-slate-100 text-slate-500{% endif %}">
@@ -294,7 +360,7 @@
                                         </button>
                                     </form>
                                 </td>
-                                <td class="py-2.5 text-right">
+                                <td class="py-3 align-top text-right">
                                     {% if u.id != user.id %}
                                     <form method="post" action="{{ base_path }}/admin/user/{{ u.id }}/delete" onsubmit="return confirm('Benutzer wirklich löschen?');">
                                         <button class="text-rose-600 hover:underline">Löschen</button>
@@ -313,19 +379,83 @@
     {% endif %}
 </div>
 
+<!-- Modal für Termin-Details im Kalender -->
+<div id="eventModal" class="fixed inset-0 bg-black/40 hidden items-center justify-center z-50 p-4">
+    <div class="bg-white rounded-2xl max-w-md w-full p-5 shadow-xl">
+        <div class="flex justify-between items-start mb-3">
+            <h3 id="modalTitle" class="text-lg font-bold text-slate-900">Ladedetails</h3>
+            <button onclick="closeModal()" class="text-slate-400 hover:text-slate-700 font-bold text-lg">✕</button>
+        </div>
+        <div id="modalBody" class="space-y-2 text-sm text-slate-700 mb-5"></div>
+        <div class="flex justify-end gap-2" id="modalActions"></div>
+    </div>
+</div>
+
+<script>
+// Passwort ein-/ausblenden
+function togglePw(inputId, btn) {
+    const inp = document.getElementById(inputId);
+    if (inp.type === "password") {
+        inp.type = "text";
+        btn.innerText = "🙈";
+    } else {
+        inp.type = "password";
+        btn.innerText = "👁️";
+    }
+}
+
+// Live-Passwort-Vergleich bei Registrierung
+function checkPwMatch() {
+    const p1 = document.getElementById('reg_pw1').value;
+    const p2 = document.getElementById('reg_pw2').value;
+    const hint = document.getElementById('pw_match_hint');
+    if (!p2) {
+        hint.classList.add('hidden');
+        return true;
+    }
+    hint.classList.remove('hidden');
+    if (p1 === p2) {
+        hint.className = "text-xs text-emerald-600 font-semibold";
+        hint.innerText = "✅ Passwörter stimmen überein";
+        return true;
+    } else {
+        hint.className = "text-xs text-rose-600 font-semibold";
+        hint.innerText = "⚠️ Passwörter stimmen noch nicht überein";
+        return false;
+    }
+}
+
+function checkRegForm() {
+    if (!checkPwMatch()) {
+        alert("Bitte prüfe dein Passwort – die beiden Eingaben stimmen nicht überein.");
+        return false;
+    }
+    return true;
+}
+</script>
+
 {% if user %}
 <script>
+const VEHICLES = {{ user_vehicles_json | safe }};
+const BOOKINGS = {{ bookings_json | safe }};
+const CURRENT_USER_ID = {{ user.id }};
+const IS_ADMIN = {{ 'true' if user.is_admin else 'false' }};
+const BASE_PATH = "{{ base_path }}";
+
 function calcDuration() {
     const start = parseFloat(document.getElementById('soc_start').value) || 0;
     const target = parseFloat(document.getElementById('soc_target').value) || 0;
-    const battery = {{ user.battery_kwh }};
-    const maxKw = Math.min(11.0, {{ user.max_charge_kw }});
+    const vehId = parseInt(document.getElementById('vehicle_select').value);
+    const veh = VEHICLES.find(v => v.id === vehId) || VEHICLES[0];
     const el = document.getElementById('est_preview');
 
+    if (!veh) return;
     if (target <= start) {
         el.innerText = "Bitte einen Ziel-Ladestand höher als Start wählen.";
         return;
     }
+    const battery = veh.battery_kwh;
+    const maxKw = Math.min(11.0, veh.max_charge_kw);
     const kwh = battery * ((target - start) / 100.0);
     const mins = Math.max(30, Math.round((kwh / maxKw) * 1.10 * 60));
     const h = Math.floor(mins / 60);
@@ -333,6 +463,189 @@ function calcDuration() {
     el.innerText = `Geschätzte Ladedauer: ~${h} Std. ${m} Min. (${kwh.toFixed(1)} kWh)`;
 }
 calcDuration();
+
+// --- OUTLOOK KALENDER LOGIK ---
+let calAnchorDate = new Date();
+calAnchorDate.setHours(0, 0, 0, 0);
+
+const START_HOUR = 6;  // 06:00 Uhr
+const END_HOUR = 20;   // 20:00 Uhr
+const HOUR_HEIGHT = 46; // Pixel pro Stunde
+
+function getMonday(d) {
+    const date = new Date(d);
+    const day = date.getDay();
+    const diff = date.getDate() - day + (day === 0 ? -6 : 1);
+    date.setDate(diff);
+    date.setHours(0, 0, 0, 0);
+    return date;
+}
+
+function calToday() {
+    calAnchorDate = new Date();
+    calAnchorDate.setHours(0, 0, 0, 0);
+    renderCalendar();
+}
+
+function calShift(dir) {
+    const mode = document.getElementById('cal_mode').value;
+    const step = (mode === '3days') ? 3 : 7;
+    calAnchorDate.setDate(calAnchorDate.getDate() + (dir * step));
+    renderCalendar();
+}
+
+function formatDateYMD(d) {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+}
+
+function renderCalendar() {
+    const mode = document.getElementById('cal_mode').value;
+    let days = [];
+    if (mode === '3days') {
+        for (let i = 0; i < 3; i++) {
+            const d = new Date(calAnchorDate);
+            d.setDate(d.getDate() + i);
+            days.push(d);
+        }
+    } else {
+        const mon = getMonday(calAnchorDate);
+        const count = (mode === 'workweek') ? 5 : 7;
+        for (let i = 0; i < count; i++) {
+            const d = new Date(mon);
+            d.setDate(d.getDate() + i);
+            days.push(d);
+        }
+    }
+
+    const monthNames = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"];
+    const dayNames = ["Sonntag", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag"];
+    const first = days[0];
+    const last = days[days.length - 1];
+    document.getElementById('cal_title').innerText = `${first.getDate()}. – ${last.getDate()}. ${monthNames[last.getMonth()]} ${last.getFullYear()}`;
+
+    const todayStr = formatDateYMD(new Date());
+    const totalHours = END_HOUR - START_HOUR;
+    const gridHeight = totalHours * HOUR_HEIGHT;
+
+    let html = `<div class="grid" style="grid-template-columns: 58px repeat(${days.length}, minmax(115px, 1fr));">`;
+
+    // Kopfzeile (wie Outlook)
+    html += `<div class="bg-slate-50 border-b border-r border-slate-200 p-2"></div>`;
+    days.forEach(d => {
+        const ymd = formatDateYMD(d);
+        const isToday = (ymd === todayStr);
+        html += `
+            <div class="border-b border-r border-slate-200 p-2.5 text-left ${isToday ? 'bg-emerald-50/70' : 'bg-slate-50'}">
+                <div class="text-xs font-medium ${isToday ? 'text-emerald-700' : 'text-slate-500'}">${dayNames[d.getDay()]}</div>
+                <div class="text-lg font-bold mt-0.5 ${isToday ? 'text-emerald-700' : 'text-slate-800'}">${d.getDate()}</div>
+            </div>
+        `;
+    });
+
+    // Zeit-Spalte links
+    html += `<div class="relative border-r border-slate-200 bg-slate-50/40" style="height: ${gridHeight}px;">`;
+    for (let h = START_HOUR; h < END_HOUR; h++) {
+        const top = (h - START_HOUR) * HOUR_HEIGHT;
+        html += `<div class="absolute w-full text-right pr-2 text-[11px] text-slate-400 -mt-2" style="top: ${top}px;">${String(h).padStart(2, '0')}:00</div>`;
+    }
+    html += `</div>`;
+
+    // Tages-Spalten
+    days.forEach(d => {
+        const ymd = formatDateYMD(d);
+        const isToday = (ymd === todayStr);
+        html += `<div class="relative border-r border-slate-200 ${isToday ? 'bg-emerald-50/10' : ''}" style="height: ${gridHeight}px;">`;
+
+        // Stundenlinien
+        for (let h = START_HOUR; h < END_HOUR; h++) {
+            const top = (h - START_HOUR) * HOUR_HEIGHT;
+            html += `<div class="absolute w-full border-t border-slate-100" style="top: ${top}px;"></div>`;
+        }
+
+        // Aktuelle Uhrzeit-Linie bei Heute
+        if (isToday) {
+            const now = new Date();
+            const nowMins = (now.getHours() - START_HOUR) * 60 + now.getMinutes();
+            if (nowMins >= 0 && nowMins <= totalHours * 60) {
+                const nowTop = (nowMins / 60) * HOUR_HEIGHT;
+                html += `<div class="absolute w-full border-t-2 border-rose-500 z-20 pointer-events-none" style="top: ${nowTop}px;"><span class="w-2 h-2 bg-rose-500 rounded-full inline-block -mt-1 -ml-1"></span></div>`;
+            }
+        }
+
+        // Buchungen für diesen Tag filtern
+        const dayBookings = BOOKINGS.filter(b => b.start_time.startsWith(ymd));
+        dayBookings.forEach(b => {
+            const startParts = b.start_time.split('T')[1].split(':');
+            const endParts = b.end_time.split('T')[1].split(':');
+            const startMin = parseInt(startParts[0]) * 60 + parseInt(startParts[1]);
+            let endMin = parseInt(endParts[0]) * 60 + parseInt(endParts[1]);
+            if (b.end_time.split('T')[0] > ymd) endMin = END_HOUR * 60;
+
+            const clampedStart = Math.max(START_HOUR * 60, startMin);
+            const clampedEnd = Math.min(END_HOUR * 60, endMin);
+            if (clampedEnd <= clampedStart) return;
+
+            const topPx = ((clampedStart - START_HOUR * 60) / 60) * HOUR_HEIGHT;
+            const heightPx = Math.max(24, ((clampedEnd - clampedStart) / 60) * HOUR_HEIGHT - 2);
+
+            // Säule 1 links (50%), Säule 2 rechts (50%) -> keine Überlappung im Kalender!
+            const isCharger1 = (b.charger_id === 1);
+            const leftPct = isCharger1 ? '2%' : '51%';
+            const colorCls = isCharger1
+                ? 'bg-emerald-100 border-l-4 border-emerald-600 text-emerald-950 hover:bg-emerald-200'
+                : 'bg-sky-100 border-l-4 border-sky-600 text-sky-950 hover:bg-sky-200';
+
+            html += `
+                <div onclick='openBookingModal(${JSON.stringify(b)})'
+                     class="absolute rounded-md px-1.5 py-1 text-[11px] leading-tight shadow-xs cursor-pointer overflow-hidden z-10 transition ${colorCls}"
+                     style="top: ${topPx}px; height: ${heightPx}px; left: ${leftPct}; width: 47%;">
+                    <div class="font-bold truncate">${b.full_name}</div>
+                    <div class="text-[10px] opacity-80 truncate">${b.start_time.split('T')[1]}–${b.end_time.split('T')[1]}</div>
+                    <div class="text-[10px] opacity-75 truncate">${b.display_car}</div>
+                </div>
+            `;
+        });
+
+        html += `</div>`;
+    });
+
+    html += `</div>`;
+    document.getElementById('outlook_calendar').innerHTML = html;
+}
+
+function openBookingModal(b) {
+    document.getElementById('modalTitle').innerText = `${b.charger_name}`;
+    document.getElementById('modalBody').innerHTML = `
+        <div><strong>Fahrer:</strong> ${b.full_name}</div>
+        <div><strong>Fahrzeug:</strong> ${b.display_car} (max. ${b.display_kw} kW)</div>
+        <div><strong>Zeitraum:</strong> ${b.start_time.replace('T', ' ')} bis ${b.end_time.replace('T', ' ')}</div>
+        <div><strong>Ladestand:</strong> ${b.soc_start}% → ${b.soc_target}%</div>
+        ${b.note ? `<div class="bg-amber-50 text-amber-800 p-2 rounded-lg text-xs">💬 ${b.note}</div>` : ''}
+    `;
+    const actions = document.getElementById('modalActions');
+    actions.innerHTML = `<button onclick="closeModal()" class="px-4 py-2 rounded-xl bg-slate-100 text-xs font-semibold">Schließen</button>`;
+    if (IS_ADMIN || b.user_id === CURRENT_USER_ID) {
+        actions.innerHTML += `
+            <form method="post" action="${BASE_PATH}/booking/${b.id}/delete">
+                <button class="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold">Buchung stornieren</button>
+            </form>
+        `;
+    }
+    const modal = document.getElementById('eventModal');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+}
+
+function closeModal() {
+    const modal = document.getElementById('eventModal');
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+}
+
+renderCalendar();
 </script>
 {% endif %}
 </body>
