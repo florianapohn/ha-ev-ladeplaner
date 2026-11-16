@@ -1,6 +1,6 @@
 name: "EV Ladeplaner"
 description: "Firmen-Ladeplanung für 2 E-Auto Ladestationen inkl. Mehr-Fahrzeug-Profilen, Kalender & Admin-Steuerung"
-version: "1.1.1"
+version: "1.2.0"
 slug: "ev_charger_planner"
 init: false
 arch:
