@@ -250,7 +250,6 @@
                     </div>
 
                     <div class="flex items-center gap-3">
-                        <!-- Legende Ladestationen -->
                         <div class="hidden sm:flex items-center gap-2 text-xs">
                             <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-emerald-500 inline-block"></span> Säule 1</span>
                             <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-sky-500 inline-block"></span> Säule 2</span>
@@ -273,15 +272,79 @@
 
                 <!-- Kalender Raster -->
                 <div class="overflow-x-auto max-h-[760px] overflow-y-auto border border-slate-200 rounded-xl" id="cal_scroll_box">
-                    <div id="outlook_calendar" class="min-w-[650px] bg-white">
-                        <!-- Wird dynamisch per JS im Outlook-Stil gezeichnet -->
-                    </div>
+                    <div id="outlook_calendar" class="min-w-[650px] bg-white"></div>
                 </div>
                 <p class="text-[11px] text-slate-400 mt-2">Tipp: Klicke auf einen Termin im Kalender, um Details zu sehen oder ihn zu stornieren.</p>
             </div>
 
             {% if user.is_admin %}
-            <!-- ADMIN-BEREICH -->
+            <!-- ADMIN-AUSWERTUNG: ENERGIE (kWh) & RESERVIERTE ZEIT PRO USER -->
+            <div class="bg-white p-5 rounded-2xl shadow-sm border-2 border-emerald-100">
+                <div class="flex flex-wrap items-center justify-between gap-3 mb-4 pb-3 border-b">
+                    <div>
+                        <h2 class="text-lg font-bold text-emerald-950">📊 Lade- & Zeit-Auswertung pro Benutzer</h2>
+                        <p class="text-xs text-slate-500">Alle Fahrzeuge eines Benutzers werden für kWh und reservierte Zeit zusammengerechnet.</p>
+                    </div>
+
+                    <!-- Filter-Steuerung: Tag / Woche / Monat / Jahr + Sortierung -->
+                    <div class="flex flex-wrap items-center gap-2">
+                        <select id="stats_period" onchange="updateStatsPicker()" class="border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-semibold bg-white">
+                            <option value="day">Pro Tag</option>
+                            <option value="week">Pro Woche</option>
+                            <option value="month" selected>Pro Monat</option>
+                            <option value="year">Pro Jahr</option>
+                            <option value="all">Gesamt (Alle Zeit)</option>
+                        </select>
+                        <input type="date" id="stats_date" onchange="renderStats()" class="border border-slate-300 rounded-lg px-2.5 py-1 text-xs bg-white">
+                        <input type="week" id="stats_week" onchange="renderStats()" class="border border-slate-300 rounded-lg px-2.5 py-1 text-xs bg-white hidden">
+                        <input type="month" id="stats_month" onchange="renderStats()" class="border border-slate-300 rounded-lg px-2.5 py-1 text-xs bg-white hidden">
+                        <input type="number" id="stats_year" min="2024" max="2035" onchange="renderStats()" class="border border-slate-300 rounded-lg px-2.5 py-1 text-xs bg-white w-20 hidden">
+                        <select id="stats_sort" onchange="renderStats()" class="border border-slate-300 rounded-lg px-2 py-1.5 text-xs bg-slate-50 font-medium" title="Sortierung">
+                            <option value="kwh">Sortieren: kWh</option>
+                            <option value="time">Sortieren: Zeit</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Zusammenfassung Karten -->
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+                    <div class="bg-emerald-50 border border-emerald-100 rounded-xl p-3">
+                        <div class="text-[11px] text-emerald-700 font-medium">Zeitraum</div>
+                        <div class="text-xs sm:text-sm font-bold text-emerald-950 mt-0.5 truncate" id="stats_range_label">-</div>
+                    </div>
+                    <div class="bg-slate-50 border border-slate-200 rounded-xl p-3">
+                        <div class="text-[11px] text-slate-500 font-medium">Reservierungen</div>
+                        <div class="text-base font-bold text-slate-900 mt-0.5" id="stats_total_count">0</div>
+                    </div>
+                    <div class="bg-sky-50 border border-sky-100 rounded-xl p-3">
+                        <div class="text-[11px] text-sky-700 font-medium">Reservierte Zeit gesamt</div>
+                        <div class="text-base font-bold text-sky-950 mt-0.5" id="stats_total_time">0 Std. 0 Min.</div>
+                    </div>
+                    <div class="bg-indigo-50 border border-indigo-100 rounded-xl p-3">
+                        <div class="text-[11px] text-indigo-700 font-medium">Geladene Energie gesamt</div>
+                        <div class="text-base font-bold text-indigo-950 mt-0.5" id="stats_total_kwh">0,00 kWh</div>
+                    </div>
+                </div>
+
+                <!-- Auswertungstabelle -->
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-xs">
+                        <thead>
+                            <tr class="border-b text-slate-500">
+                                <th class="py-2">Mitarbeiter / Benutzer</th>
+                                <th class="py-2">Genutzte Fahrzeuge</th>
+                                <th class="py-2 text-center">Slots</th>
+                                <th class="py-2 text-right">Reservierte Zeit</th>
+                                <th class="py-2 text-right">Summe (kWh)</th>
+                                <th class="py-2 pl-4 w-32">Anteil</th>
+                            </tr>
+                        </thead>
+                        <tbody id="stats_table_body" class="divide-y"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- ADMIN-BEREICH: BENUTZER & NETZWERK -->
             <div class="bg-white p-5 rounded-2xl shadow-sm border-2 border-indigo-100">
                 <h2 class="text-lg font-bold text-indigo-900 mb-4">🛡️ Admin-Bereich: Benutzer, Fahrzeuge & Netzwerkzugriff</h2>
                 
@@ -474,9 +537,9 @@ calcDuration();
 let calAnchorDate = new Date();
 calAnchorDate.setHours(0, 0, 0, 0);
 
-const START_HOUR = 0;   // 00:00 Uhr (Nachtschicht)
-const END_HOUR = 24;    // 24:00 Uhr
-const HOUR_HEIGHT = 34; // Pixel pro Stunde (kompakt für 24h)
+const START_HOUR = 0;
+const END_HOUR = 24;
+const HOUR_HEIGHT = 34;
 
 function getMonday(d) {
     const date = new Date(d);
@@ -543,7 +606,6 @@ function renderCalendar() {
 
     let html = `<div class="grid" style="grid-template-columns: 58px repeat(${days.length}, minmax(115px, 1fr));">`;
 
-    // Fixierte Kopfzeile beim Scrollen
     html += `<div class="sticky top-0 z-30 bg-slate-50 border-b border-r border-slate-200 p-2"></div>`;
     days.forEach(d => {
         const ymd = formatDateYMD(d);
@@ -556,7 +618,6 @@ function renderCalendar() {
         `;
     });
 
-    // Zeit-Spalte links (00:00 bis 23:00)
     html += `<div class="relative border-r border-slate-200 bg-slate-50/60" style="height: ${gridHeight}px;">`;
     for (let h = START_HOUR; h < END_HOUR; h++) {
         const top = (h - START_HOUR) * HOUR_HEIGHT;
@@ -565,25 +626,21 @@ function renderCalendar() {
     }
     html += `</div>`;
 
-    // Tages-Spalten
     days.forEach(d => {
         const ymd = formatDateYMD(d);
         const isToday = (ymd === todayStr);
         html += `<div class="relative border-r border-slate-200" style="height: ${gridHeight}px;">`;
 
-        // Dezente Schicht-Hintergrundzonen (Nacht: 00-06 & 22-24, Früh: 06-14, Spät: 14-22)
         html += `<div class="absolute w-full bg-indigo-50/40 pointer-events-none" style="top: 0px; height: ${6 * HOUR_HEIGHT}px;"></div>`;
         html += `<div class="absolute w-full bg-amber-50/30 pointer-events-none" style="top: ${14 * HOUR_HEIGHT}px; height: ${8 * HOUR_HEIGHT}px;"></div>`;
         html += `<div class="absolute w-full bg-indigo-50/40 pointer-events-none" style="top: ${22 * HOUR_HEIGHT}px; height: ${2 * HOUR_HEIGHT}px;"></div>`;
 
-        // Stundenlinien & Schichtwechsel-Linien (06:00, 14:00, 22:00)
         for (let h = START_HOUR; h < END_HOUR; h++) {
             const top = (h - START_HOUR) * HOUR_HEIGHT;
             const isShiftChange = (h === 6 || h === 14 || h === 22);
             html += `<div class="absolute w-full border-t ${isShiftChange ? 'border-indigo-200 border-dashed' : 'border-slate-100'}" style="top: ${top}px;"></div>`;
         }
 
-        // Aktuelle Uhrzeit-Linie bei Heute
         if (isToday) {
             const now = new Date();
             const nowMins = now.getHours() * 60 + now.getMinutes();
@@ -591,17 +648,13 @@ function renderCalendar() {
             html += `<div class="absolute w-full border-t-2 border-rose-500 z-20 pointer-events-none" style="top: ${nowTop}px;"><span class="w-2 h-2 bg-rose-500 rounded-full inline-block -mt-1 -ml-1"></span></div>`;
         }
 
-        // Buchungen für diesen Tag (inkl. Über-Mitternacht-Buchungen vom Vortag!)
         BOOKINGS.forEach(b => {
             const bStartDate = b.start_time.split('T')[0];
             const bEndDate = b.end_time.split('T')[0];
-
-            // Prüfen, ob die Buchung diesen Tag (ymd) berührt
             if (bStartDate > ymd || bEndDate < ymd) return;
 
             let startMin = (bStartDate === ymd) ? parseMinutes(b.start_time.split('T')[1]) : 0;
             let endMin = (bEndDate === ymd) ? parseMinutes(b.end_time.split('T')[1]) : 24 * 60;
-
             if (endMin <= startMin) return;
 
             const topPx = (startMin / 60) * HOUR_HEIGHT;
@@ -641,7 +694,7 @@ function openBookingModal(b) {
         <div><strong>Fahrer:</strong> ${b.full_name}</div>
         <div><strong>Fahrzeug:</strong> ${b.display_car} (max. ${b.display_kw} kW)</div>
         <div><strong>Zeitraum:</strong> ${b.start_time.replace('T', ' ')} bis ${b.end_time.replace('T', ' ')}</div>
-        <div><strong>Ladestand:</strong> ${b.soc_start}% → ${b.soc_target}%</div>
+        <div><strong>Ladestand:</strong> ${b.soc_start}% → ${b.soc_target}% (ca. ${Number(b.charged_kwh || 0).toFixed(1)} kWh)</div>
         ${b.note ? `<div class="bg-amber-50 text-amber-800 p-2 rounded-lg text-xs">💬 ${b.note}</div>` : ''}
     `;
     const actions = document.getElementById('modalActions');
@@ -666,13 +719,162 @@ function closeModal() {
 
 renderCalendar();
 
-// Automatisch zur aktuellen Schicht / Uhrzeit scrollen
 const scrollBox = document.getElementById('cal_scroll_box');
 if (scrollBox) {
     const currentH = Math.max(0, new Date().getHours() - 2);
     scrollBox.scrollTop = currentH * HOUR_HEIGHT;
 }
 </script>
+
+{% if user.is_admin %}
+<script>
+// --- ADMIN kWh & ZEIT AUSWERTUNG ---
+const ALL_USERS_STATS = {{ all_users_json | safe }};
+const STATS_BOOKINGS = {{ all_stats_bookings_json | safe }};
+
+function formatDurationMinutes(totalMins) {
+    const mins = Math.max(0, Math.round(totalMins));
+    const h = Math.floor(mins / 60);
+    const m = mins % 60;
+    return `${h} Std. ${m} Min.`;
+}
+
+function getISOWeekString(d) {
+    const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+    const dayNum = date.getUTCDay() || 7;
+    date.setUTCDate(date.getUTCDate() + 4 - dayNum);
+    const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+    const weekNo = Math.ceil((((date - yearStart) / 86400000) + 1) / 7);
+    return `${date.getUTCFullYear()}-W${String(weekNo).padStart(2, '0')}`;
+}
+
+function initStatsPickers() {
+    const now = new Date();
+    document.getElementById('stats_date').value = formatDateYMD(now);
+    document.getElementById('stats_week').value = getISOWeekString(now);
+    document.getElementById('stats_month').value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    document.getElementById('stats_year').value = now.getFullYear();
+    updateStatsPicker();
+}
+
+function updateStatsPicker() {
+    const p = document.getElementById('stats_period').value;
+    document.getElementById('stats_date').classList.toggle('hidden', p !== 'day');
+    document.getElementById('stats_week').classList.toggle('hidden', p !== 'week');
+    document.getElementById('stats_month').classList.toggle('hidden', p !== 'month');
+    document.getElementById('stats_year').classList.toggle('hidden', p !== 'year');
+    renderStats();
+}
+
+function renderStats() {
+    const period = document.getElementById('stats_period').value;
+    const sortBy = document.getElementById('stats_sort').value;
+    let label = "Gesamter Zeitraum";
+
+    const filtered = STATS_BOOKINGS.filter(b => {
+        const startDateStr = b.start_time.split('T')[0];
+        if (period === 'day') {
+            const val = document.getElementById('stats_date').value;
+            label = `Tag: ${val}`;
+            return startDateStr === val;
+        } else if (period === 'week') {
+            const val = document.getElementById('stats_week').value;
+            label = `KW: ${val}`;
+            const d = new Date(startDateStr + "T12:00:00");
+            return getISOWeekString(d) === val;
+        } else if (period === 'month') {
+            const val = document.getElementById('stats_month').value;
+            label = `Monat: ${val}`;
+            return startDateStr.startsWith(val);
+        } else if (period === 'year') {
+            const val = String(document.getElementById('stats_year').value);
+            label = `Jahr: ${val}`;
+            return startDateStr.startsWith(val);
+        }
+        return true;
+    });
+
+    document.getElementById('stats_range_label').innerText = label;
+
+    const userMap = {};
+    ALL_USERS_STATS.forEach(u => {
+        userMap[u.id] = {
+            full_name: u.full_name,
+            username: u.username,
+            count: 0,
+            minutes: 0,
+            kwh: 0,
+            cars: new Set()
+        };
+    });
+
+    let totalCount = 0;
+    let totalMinutes = 0;
+    let totalKwh = 0;
+
+    filtered.forEach(b => {
+        const kwh = Number(b.charged_kwh || 0);
+        const dtStart = new Date(b.start_time);
+        const dtEnd = new Date(b.end_time);
+        const diffMins = Math.max(0, (dtEnd - dtStart) / 60000);
+
+        totalCount += 1;
+        totalMinutes += diffMins;
+        totalKwh += kwh;
+
+        if (!userMap[b.user_id]) {
+            userMap[b.user_id] = { full_name: b.full_name, username: b.username, count: 0, minutes: 0, kwh: 0, cars: new Set() };
+        }
+        userMap[b.user_id].count += 1;
+        userMap[b.user_id].minutes += diffMins;
+        userMap[b.user_id].kwh += kwh;
+        if (b.car_model) userMap[b.user_id].cars.add(b.car_model);
+    });
+
+    document.getElementById('stats_total_count').innerText = totalCount;
+    document.getElementById('stats_total_time').innerText = formatDurationMinutes(totalMinutes);
+    document.getElementById('stats_total_kwh').innerText = `${totalKwh.toFixed(2).replace('.', ',')} kWh`;
+
+    const rows = Object.values(userMap).sort((a, b) => {
+        if (sortBy === 'time') return b.minutes - a.minutes;
+        return b.kwh - a.kwh;
+    });
+
+    const tbody = document.getElementById('stats_table_body');
+
+    if (rows.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" class="py-4 text-center text-slate-400">Keine Daten vorhanden.</td></tr>`;
+        return;
+    }
+
+    tbody.innerHTML = rows.map(r => {
+        const pct = (sortBy === 'time')
+            ? (totalMinutes > 0 ? Math.round((r.minutes / totalMinutes) * 100) : 0)
+            : (totalKwh > 0 ? Math.round((r.kwh / totalKwh) * 100) : 0);
+        const carsText = r.cars.size > 0 ? Array.from(r.cars).join(', ') : '–';
+        return `
+            <tr class="${r.count === 0 ? 'opacity-50' : ''}">
+                <td class="py-2.5 font-bold text-slate-800">${r.full_name} <span class="text-slate-400 font-normal">(@${r.username})</span></td>
+                <td class="py-2.5 text-slate-600">${carsText}</td>
+                <td class="py-2.5 text-center font-medium">${r.count}</td>
+                <td class="py-2.5 text-right font-semibold text-sky-700">${formatDurationMinutes(r.minutes)}</td>
+                <td class="py-2.5 text-right font-bold text-emerald-700">${r.kwh.toFixed(2).replace('.', ',')} kWh</td>
+                <td class="py-2.5 pl-4">
+                    <div class="flex items-center gap-2">
+                        <div class="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
+                            <div class="${sortBy === 'time' ? 'bg-sky-500' : 'bg-emerald-500'} h-2 rounded-full" style="width: ${pct}%;"></div>
+                        </div>
+                        <span class="text-[11px] text-slate-500 w-8 text-right">${pct}%</span>
+                    </div>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+initStatsPickers();
+</script>
+{% endif %}
 {% endif %}
 </body>
 </html>
