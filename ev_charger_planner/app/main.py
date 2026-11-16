@@ -399,4 +399,26 @@ async def admin_delete_user(request: Request, target_id: int):
     conn = get_db()
     bp = base_path(request)
     user = get_current_user(request, conn)
-    if user and
+    if user and user["is_admin"] and target_id != user["id"]:
+        conn.execute("DELETE FROM bookings WHERE user_id = ?", (target_id,))
+        conn.execute("DELETE FROM users WHERE id = ?", (target_id,))
+        conn.commit()
+    conn.close()
+    return RedirectResponse(f"{bp}/?msg=Benutzer+entfernt", status_code=303)
+
+
+@app.post("/admin/settings")
+async def admin_settings(
+    request: Request,
+    company_cidrs: str = Form(...),
+    allow_remote_global: Optional[str] = Form(None)
+):
+    conn = get_db()
+    bp = base_path(request)
+    user = get_current_user(request, conn)
+    if user and user["is_admin"]:
+        conn.execute("UPDATE settings SET value = ? WHERE key = 'company_cidrs'", (company_cidrs.strip(),))
+        conn.execute("UPDATE settings SET value = ? WHERE key = 'allow_remote_global'", ("1" if allow_remote_global else "0",))
+        conn.commit()
+    conn.close()
+    return RedirectResponse(f"{bp}/?msg=Netzwerk-Einstellungen+gespeichert", status_code=303)
